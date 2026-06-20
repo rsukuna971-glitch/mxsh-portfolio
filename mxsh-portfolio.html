@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mxsh — Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0f;
+    --surface:#14141c;
+    --line:#23232f;
+    --hot:#ff2e63;
+    --cyan:#08d9d6;
+    --text:#eaeaea;
+    --text-dim:#8a8a99;
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+
+  html{scroll-behavior:smooth;}
+
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk', sans-serif;
+    overflow-x:hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
+  }
+
+  /* Scanline texture overlay */
+  body::before{
+    content:'';
+    position:fixed;
+    inset:0;
+    background:repeating-linear-gradient(
+      0deg,
+      rgba(255,255,255,0.012) 0px,
+      rgba(255,255,255,0.012) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events:none;
+    z-index:9999;
+  }
+
+  .noise-glow{
+    position:fixed;
+    top:-20%;
+    left:-10%;
+    width:60vw;
+    height:60vw;
+    background:radial-gradient(circle, rgba(255,46,99,0.07), transparent 70%);
+    pointer-events:none;
+    z-index:0;
+    filter:blur(40px);
+  }
+  .noise-glow.b{
+    top:auto;
+    bottom:-20%;
+    right:-10%;
+    left:auto;
+    background:radial-gradient(circle, rgba(8,217,214,0.06), transparent 70%);
+  }
+
+  nav{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    z-index:100;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:22px 6vw;
+    background:linear-gradient(to bottom, rgba(10,10,15,0.92), transparent);
+    backdrop-filter:blur(6px);
+  }
+
+  .nav-logo{
+    font-family:'Anton', sans-serif;
+    font-size:20px;
+    letter-spacing:1px;
+    color:var(--text);
+  }
+  .nav-logo span{color:var(--hot);}
+
+  .nav-links{
+    display:flex;
+    gap:32px;
+    list-style:none;
+  }
+  .nav-links a{
+    color:var(--text-dim);
+    text-decoration:none;
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    transition:color 0.2s;
+    position:relative;
+  }
+  .nav-links a:hover, .nav-links a:focus-visible{color:var(--cyan);}
+  .nav-links a:focus-visible{outline:1px solid var(--cyan); outline-offset:4px;}
+
+  section{
+    position:relative;
+    z-index:1;
+    padding:140px 6vw 100px;
+    max-width:1100px;
+    margin:0 auto;
+  }
+
+  /* HERO */
+  .hero{
+    min-height:92vh;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    padding-top:100px;
+  }
+
+  .hero-eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    color:var(--cyan);
+    letter-spacing:3px;
+    text-transform:uppercase;
+    margin-bottom:24px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .hero-eyebrow::before{
+    content:'';
+    width:8px;
+    height:8px;
+    background:var(--cyan);
+    border-radius:50%;
+    box-shadow:0 0 12px var(--cyan);
+    animation:pulse 1.8s infinite;
+  }
+  @keyframes pulse{
+    0%,100%{opacity:1;}
+    50%{opacity:0.3;}
+  }
+
+  .hero h1{
+    font-family:'Anton', sans-serif;
+    font-size:clamp(48px, 10vw, 110px);
+    line-height:0.95;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    margin-bottom:28px;
+  }
+  .hero h1 .glitch-word{
+    color:var(--hot);
+    position:relative;
+    display:inline-block;
+  }
+
+  .hero-sub{
+    font-size:clamp(16px, 2vw, 20px);
+    color:var(--text-dim);
+    max-width:560px;
+    line-height:1.6;
+    margin-bottom:40px;
+  }
+  .hero-sub strong{color:var(--text); font-weight:500;}
+
+  .hero-cta{
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+
+  .btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    text-decoration:none;
+    padding:16px 28px;
+    border-radius:2px;
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    transition:transform 0.2s, box-shadow 0.2s;
+  }
+  .btn-primary{
+    background:var(--hot);
+    color:#0a0a0f;
+    font-weight:700;
+  }
+  .btn-primary:hover, .btn-primary:focus-visible{
+    transform:translateY(-2px);
+    box-shadow:0 6px 24px rgba(255,46,99,0.4);
+  }
+  .btn-ghost{
+    border:1px solid var(--line);
+    color:var(--text);
+  }
+  .btn-ghost:hover, .btn-ghost:focus-visible{
+    border-color:var(--cyan);
+    color:var(--cyan);
+  }
+  .btn:focus-visible{outline:2px solid var(--cyan); outline-offset:3px;}
+
+  /* SECTION HEADERS */
+  .sec-head{
+    display:flex;
+    align-items:baseline;
+    gap:18px;
+    margin-bottom:50px;
+  }
+  .sec-num{
+    font-family:'JetBrains Mono', monospace;
+    color:var(--hot);
+    font-size:13px;
+    border:1px solid var(--hot);
+    padding:4px 10px;
+    border-radius:2px;
+  }
+  .sec-head h2{
+    font-family:'Anton', sans-serif;
+    font-size:clamp(28px, 4vw, 42px);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+  .sec-head .rule{
+    flex:1;
+    height:1px;
+    background:linear-gradient(to right, var(--line), transparent);
+  }
+
+  /* WORK / SCENE CARDS */
+  .scene-card{
+    display:grid;
+    grid-template-columns:120px 1fr;
+    gap:28px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:4px;
+    overflow:hidden;
+    margin-bottom:28px;
+    transition:border-color 0.3s;
+  }
+  .scene-card:hover{border-color:var(--cyan);}
+
+  .scene-tc{
+    background:#0d0d13;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:18px 14px;
+    border-right:1px solid var(--line);
+    font-family:'JetBrains Mono', monospace;
+  }
+  .scene-tc .tc-label{
+    font-size:10px;
+    color:var(--text-dim);
+    letter-spacing:1px;
+  }
+  .scene-tc .tc-num{
+    font-size:22px;
+    color:var(--cyan);
+    font-weight:500;
+  }
+
+  .scene-body{
+    padding:24px 24px 24px 0;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+
+  .scene-tags{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .tag{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    color:var(--hot);
+    border:1px solid rgba(255,46,99,0.3);
+    background:rgba(255,46,99,0.08);
+    padding:4px 9px;
+    border-radius:20px;
+  }
+
+  .scene-title{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:19px;
+  }
+  .scene-desc{
+    color:var(--text-dim);
+    font-size:14px;
+    line-height:1.5;
+    max-width:520px;
+  }
+
+  .scene-embed{
+    margin-top:6px;
+    aspect-ratio:9/16;
+    max-width:260px;
+    background:#000;
+    border-radius:4px;
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .scene-embed iframe{
+    width:100%;
+    height:100%;
+    border:0;
+  }
+
+  @media (max-width: 640px){
+    .scene-card{grid-template-columns:1fr;}
+    .scene-tc{
+      flex-direction:row;
+      justify-content:space-between;
+      border-right:none;
+      border-bottom:1px solid var(--line);
+    }
+    .scene-body{padding:20px;}
+    .scene-embed{max-width:100%;}
+  }
+
+  /* ABOUT */
+  .about-grid{
+    display:grid;
+    grid-template-columns:1.2fr 1fr;
+    gap:60px;
+    align-items:start;
+  }
+  .about-text p{
+    color:var(--text-dim);
+    font-size:16px;
+    line-height:1.75;
+    margin-bottom:18px;
+  }
+  .about-text strong{color:var(--text); font-weight:600;}
+
+  .stack-list{
+    display:flex;
+    flex-direction:column;
+    gap:0;
+    border-top:1px solid var(--line);
+  }
+  .stack-row{
+    display:flex;
+    justify-content:space-between;
+    padding:14px 0;
+    border-bottom:1px solid var(--line);
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+  }
+  .stack-row span:first-child{color:var(--text-dim);}
+  .stack-row span:last-child{color:var(--text);}
+
+  @media (max-width: 760px){
+    .about-grid{grid-template-columns:1fr; gap:36px;}
+  }
+
+  /* CONTACT */
+  .contact-box{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:60px 6vw;
+    text-align:center;
+    position:relative;
+  }
+  .contact-box h2{
+    font-family:'Anton', sans-serif;
+    font-size:clamp(32px, 6vw, 56px);
+    text-transform:uppercase;
+    margin-bottom:18px;
+  }
+  .contact-box h2 span{color:var(--cyan);}
+  .contact-box p{
+    color:var(--text-dim);
+    margin-bottom:36px;
+    font-size:16px;
+  }
+  .contact-links{
+    display:flex;
+    justify-content:center;
+    gap:18px;
+    flex-wrap:wrap;
+  }
+
+  footer{
+    text-align:center;
+    padding:30px 6vw 50px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    letter-spacing:1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="noise-glow"></div>
+<div class="noise-glow b"></div>
+
+<nav>
+  <div class="nav-logo">MX<span>SH</span></div>
+  <ul class="nav-links">
+    <li><a href="#work">Work</a></li>
+    <li><a href="#about">About</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ul>
+</nav>
+
+<section class="hero" id="home">
+  <div class="hero-eyebrow">Now editing &mdash; Shorts &amp; Reels</div>
+  <h1>BEAT-SYNCED<br>EDITS THAT<br><span class="glitch-word">DON'T GET SKIPPED</span></h1>
+  <p class="hero-sub">I'm Mxsh &mdash; I cut <strong>high-energy gaming, motivational, and cinematic edits</strong> built around rhythm, punchy text, and hard transitions. Made to hold attention on Shorts and Reels.</p>
+  <div class="hero-cta">
+    <a href="#work" class="btn btn-primary">Watch the work →</a>
+    <a href="#contact" class="btn btn-ghost">Get in touch</a>
+  </div>
+</section>
+
+<section id="work">
+  <div class="sec-head">
+    <span class="sec-num">01</span>
+    <h2>Work</h2>
+    <div class="rule"></div>
+  </div>
+
+  <div class="scene-card">
+    <div class="scene-tc">
+      <div>
+        <div class="tc-label">SCENE</div>
+        <div class="tc-num">01</div>
+      </div>
+      <div class="tc-label">00:00:21</div>
+    </div>
+    <div class="scene-body">
+      <div class="scene-tags">
+        <span class="tag">Gaming</span>
+        <span class="tag">Beat-sync</span>
+      </div>
+      <div class="scene-title">Gaming Character Edit</div>
+      <p class="scene-desc">Beat-synced cuts, zoom transitions, and custom text animation timed to the drop.</p>
+      <div class="scene-embed">
+        <iframe src="https://www.youtube.com/embed/CwmgoKYZ7Eg" title="Edit 1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" loading="lazy"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <div class="scene-tc">
+      <div>
+        <div class="tc-label">SCENE</div>
+        <div class="tc-num">02</div>
+      </div>
+      <div class="tc-label">00:00:18</div>
+    </div>
+    <div class="scene-body">
+      <div class="scene-tags">
+        <span class="tag">Motivational</span>
+        <span class="tag">Hype</span>
+      </div>
+      <div class="scene-title">Motivational Hype Edit</div>
+      <p class="scene-desc">High-contrast color grade with hard cuts on the beat — built to hook in the first second.</p>
+      <div class="scene-embed">
+        <iframe src="https://www.youtube.com/embed/Wa-mSeoKlTA" title="Edit 2" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" loading="lazy"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div class="scene-card">
+    <div class="scene-tc">
+      <div>
+        <div class="tc-label">SCENE</div>
+        <div class="tc-num">03</div>
+      </div>
+      <div class="tc-label">00:00:24</div>
+    </div>
+    <div class="scene-body">
+      <div class="scene-tags">
+        <span class="tag">Cinematic</span>
+        <span class="tag">Mood</span>
+      </div>
+      <div class="scene-title">Cinematic Mood Edit</div>
+      <p class="scene-desc">Slower pacing, moody grade, atmospheric sound design — showing range beyond hype cuts.</p>
+      <div class="scene-embed">
+        <iframe src="https://www.youtube.com/embed/w_geB0V7fSw" title="Edit 3" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" loading="lazy"></iframe>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="about">
+  <div class="sec-head">
+    <span class="sec-num">02</span>
+    <h2>About</h2>
+    <div class="rule"></div>
+  </div>
+
+  <div class="about-grid">
+    <div class="about-text">
+      <p>I edit short-form video built around <strong>rhythm</strong> — matching cuts, transitions, and on-screen text to the beat so nothing feels static. My focus is gaming montages, motivational content, and cinematic edits with a distinct, energetic identity.</p>
+      <p>Currently freelance, taking on Shorts and Reels projects. <strong>Open to feedback, open to work.</strong></p>
+    </div>
+    <div class="stack-list">
+      <div class="stack-row"><span>Software</span><span>Premiere Pro, After Effects</span></div>
+      <div class="stack-row"><span>Style</span><span>Beat-sync, zoom transitions, kinetic text</span></div>
+      <div class="stack-row"><span>Formats</span><span>Shorts, Reels, montages</span></div>
+      <div class="stack-row"><span>Available for</span><span>Gaming, hype, cinematic edits</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="sec-head">
+    <span class="sec-num">03</span>
+    <h2>Contact</h2>
+    <div class="rule"></div>
+  </div>
+
+  <div class="contact-box">
+    <h2>LET'S CUT<br><span>SOMETHING GOOD.</span></h2>
+    <p>Got footage that needs to hit harder? Send the details — I'll get back to you.</p>
+    <div class="contact-links">
+      <a href="https://youtube.com/@mxsh.ae1" target="_blank" rel="noopener" class="btn btn-ghost">YouTube</a>
+      <a href="https://www.instagram.com/mxsh.ae" target="_blank" rel="noopener" class="btn btn-ghost">Instagram</a>
+      <a href="mailto:youremail@gmail.com" class="btn btn-primary">Email Me</a>
+    </div>
+  </div>
+</section>
+
+<footer>MXSH — EDITOR / 2026</footer>
+
+</body>
+</html>
